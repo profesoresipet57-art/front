@@ -3,56 +3,93 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
-let estudiantes = ref({
-  nombre: "",
-  apellido: "",
-  curso: "",
-  materia: "",
-  nota: ""
+// DIRECCION DE LA API
+const API = import.meta.env.VITE_API_URL + '/api/estudiantes'
+
+// FORMULARIO
+const estudiantes = ref({
+  nombre: '',
+  apellido: '',
+  curso: '',
+  materia: '',
+  nota: ''
 })
 
+// LISTADO
+const nuevoestudiantes = ref([])
 
-let nuevoestudiantes = ref([])
+// ESTADOS
+const cargando = ref(false)
+const guardando = ref(false)
 
+// LIMPIAR FORMULARIO
+function limpiarFormulario() {
+  estudiantes.value = {
+    nombre: '',
+    apellido: '',
+    curso: '',
+    materia: '',
+    nota: ''
+  }
+}
+
+// LISTAR ESTUDIANTES
 async function cargar_estudiantes() {
   try {
-    let respuesta = await axios.get("http://localhost:3000/api/estudiantes")
-    nuevoestudiantes.value= respuesta.data;
+    cargando.value = true
+
+    let respuesta = await axios.get(API)
+
+    nuevoestudiantes.value = respuesta.data
 
   } catch (error) {
-    alert("Error al guardar: " + error.message)
+    console.error('Error al listar:', error)
+
+    alert(
+      'Error al cargar estudiantes: ' +
+      (error.response?.data?.mensaje || error.message)
+    )
+
+  } finally {
+    cargando.value = false
   }
 }
 
-onMounted(()=>
-  cargar_estudiantes()
-)
-
+// GUARDAR ESTUDIANTE
 async function guardar() {
   try {
-    let respuesta = await axios.post("http://localhost:3000/api/estudiantes",estudiantes.value)
+    guardando.value = true
 
-    alert("¡Guardado con éxito!")
+    let respuesta = await axios.post(
+      API,
+      estudiantes.value
+    )
 
-    
-    nuevoestudiantes.value.push({
-      ...estudiantes.value,
-      id: respuesta.data.id
-    })
+    alert(respuesta.data.mensaje || '¡Guardado con éxito!')
 
-    
-    estudiantes.value = {
-      nombre: "",
-      apellido: "",
-      curso: "",
-      materia: "",
-      nota: ""
-    }
+    // Actualizar el listado desde MySQL
+    await cargar_estudiantes()
+
+    // Limpiar formulario
+    limpiarFormulario()
 
   } catch (error) {
-    alert("Error al guardar: " + error.message)
+    console.error('Error al guardar:', error)
+
+    alert(
+      'Error al guardar: ' +
+      (error.response?.data?.mensaje || error.message)
+    )
+
+  } finally {
+    guardando.value = false
   }
 }
+
+// CARGAR AL ABRIR LA PAGINA
+onMounted(() => {
+  cargar_estudiantes()
+})
 </script>
 
 <template>
@@ -61,56 +98,96 @@ async function guardar() {
   <form @submit.prevent="guardar">
 
     <label>Nombre</label>
-    <input type="text" v-model="estudiantes.nombre" required>
+    <input
+      type="text"
+      v-model.trim="estudiantes.nombre"
+      required
+    >
     <br>
 
     <label>Apellido</label>
-    <input type="text" v-model="estudiantes.apellido" required>
+    <input
+      type="text"
+      v-model.trim="estudiantes.apellido"
+      required
+    >
     <br>
 
     <label>Curso</label>
-    <input type="text" v-model="estudiantes.curso" required>
+    <input
+      type="text"
+      v-model.trim="estudiantes.curso"
+      required
+    >
     <br>
 
     <label>Materia</label>
-    <input type="text" v-model="estudiantes.materia" required>
+    <input
+      type="text"
+      v-model.trim="estudiantes.materia"
+      required
+    >
     <br>
 
     <label>Nota</label>
-    <input type="number" v-model.number="estudiantes.nota" min="1" max="10" required>
+    <input
+      type="number"
+      v-model.number="estudiantes.nota"
+      min="1"
+      max="10"
+      step="0.01"
+      required
+    >
     <br>
 
-    <input type="submit" value="Guardar alumno">
+    <button type="submit" :disabled="guardando">
+      {{ guardando ? 'Guardando...' : 'Guardar alumno' }}
+    </button>
 
   </form>
 
   <h2>LISTADO DE ALUMNOS</h2>
 
-  <table border="1">
-    <tr>
-      <th>Nombre</th>
-      <th>Apellido</th>
-      <th>Curso</th>
-      <th>Materia</th>
-      <th>Nota</th>
-      <th>Condición</th>
-    </tr>
+  <p v-if="cargando">
+    Cargando estudiantes...
+  </p>
 
-    <tr v-for="i in nuevoestudiantes" :key="i.id">
-      <td>{{ i.nombre }}</td>
-      <td>{{ i.apellido }}</td>
-      <td>{{ i.curso }}</td>
-      <td>{{ i.materia }}</td>
-      <td>{{ i.nota }}</td>
+  <p v-else-if="nuevoestudiantes.length === 0">
+    No hay estudiantes cargados.
+  </p>
 
-      <td v-if="i.nota >= 7">
-        APROBADO
-      </td>
+  <table v-else border="1">
 
-      <td v-else>
-        DESAPROBADO
-      </td>
-    </tr>
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Apellido</th>
+        <th>Curso</th>
+        <th>Materia</th>
+        <th>Nota</th>
+        <th>Condición</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <tr v-for="i in nuevoestudiantes" :key="i.id">
+
+        <td>{{ i.nombre }}</td>
+        <td>{{ i.apellido }}</td>
+        <td>{{ i.curso }}</td>
+        <td>{{ i.materia }}</td>
+        <td>{{ i.nota }}</td>
+
+        <td v-if="Number(i.nota) >= 7">
+          APROBADO
+        </td>
+
+        <td v-else>
+          DESAPROBADO
+        </td>
+
+      </tr>
+    </tbody>
 
   </table>
 
@@ -136,6 +213,17 @@ label {
 input {
   margin: 5px;
   padding: 5px;
+}
+
+button {
+  margin: 10px 5px;
+  padding: 8px 15px;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 table {
